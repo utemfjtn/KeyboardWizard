@@ -200,21 +200,16 @@ class Executor:
 
     def _do_input_text(self, p):
         import pyautogui
+        from platform_utils import input_text_via_clipboard
         text = p.get("text", "")
         interval = float(p.get("interval", 0) or 0)
         self.on_log(f"输入文本 {len(text)} 字符", "info")
-        # write 仅支持 ASCII；含中文等非 ASCII 时改用剪贴板粘贴
         try:
             text.encode("ascii")
             pyautogui.write(text, interval=interval)
         except UnicodeEncodeError:
-            try:
-                import pyperclip
-                pyperclip.copy(text)
-                pyautogui.hotkey("ctrl", "v")
-            except Exception:
-                # 退而求其次：逐字符无法输入中文，提示用户
-                self.on_log("文本含非 ASCII 字符且未安装 pyperclip，已跳过", "warn")
+            if not input_text_via_clipboard(text):
+                self.on_log("文本含非 ASCII 字符且剪贴板操作失败，已跳过", "warn")
 
     def _do_click(self, p):
         import pyautogui
@@ -296,12 +291,8 @@ class Executor:
 
     def _window_exists(self, title):
         """模糊匹配窗口标题。"""
-        try:
-            import pygetwindow as gw
-            wins = gw.getAllTitles()
-            return any(title and title.lower() in (w or "").lower() for w in wins)
-        except Exception:
-            return False
+        from platform_utils import window_exists
+        return window_exists(title)
 
     def _find_matching(self, start, open_type, close_type):
         """从 start（open 指令）开始，找到对应的 close 指令索引，支持嵌套。"""

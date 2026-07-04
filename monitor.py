@@ -92,12 +92,8 @@ class GlobalMonitor:
     def _window_match(self, title):
         if not title:
             return False
-        try:
-            import pygetwindow as gw
-            wins = gw.getAllTitles()
-            return any(title.lower() in (w or "").lower() for w in wins)
-        except Exception:
-            return False
+        from platform_utils import window_exists
+        return window_exists(title)
 
     def _image_match(self, image, confidence):
         if not image:
@@ -139,17 +135,15 @@ class GlobalMonitor:
             self.on_log(f"执行动作出错：{e}", "error")
 
     def _close_window(self, title):
+        from platform_utils import close_windows_by_title
+        if close_windows_by_title(title):
+            return
         try:
-            import pygetwindow as gw
-            for w in gw.getWindowsWithTitle(title):
-                try:
-                    w.close()
-                except Exception:
-                    pass
-        except Exception:
-            # 退而求其次：发送 Alt+F4
-            try:
-                import pyautogui
+            import pyautogui
+            from platform_utils import IS_MACOS
+            if IS_MACOS:
+                pyautogui.hotkey("command", "q")
+            else:
                 pyautogui.hotkey("alt", "f4")
-            except Exception:
-                pass
+        except Exception:
+            pass

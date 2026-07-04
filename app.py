@@ -22,6 +22,10 @@ from tkinter import filedialog, messagebox, ttk
 import commands as C
 from executor import Executor
 from monitor import GlobalMonitor
+from platform_utils import (
+    get_ui_font, get_mono_font, get_app_icon, set_window_icon,
+    HotkeyManager, resource_path, get_app_dir
+)
 
 ctk.set_appearance_mode("System")
 ctk.set_default_color_theme("blue")
@@ -29,28 +33,7 @@ ctk.set_default_color_theme("blue")
 DEFAULT_START_HOTKEY = "f6"
 DEFAULT_STOP_HOTKEY = "f7"
 
-# ----------------------------------------------------------------------------
-# 资源路径 / 配置路径（兼容 PyInstaller onefile）
-# ----------------------------------------------------------------------------
-def get_app_dir():
-    """获取可执行文件所在目录（打包后）或源码目录（开发态）。
-    config.json 和图片模板放在 exe 同级，用户方便编辑。
-    """
-    if getattr(sys, "frozen", False):
-        # PyInstaller onefile / onedir
-        return os.path.dirname(sys.executable)
-    else:
-        return os.path.dirname(os.path.abspath(__file__))
-
 CONFIG_FILE = os.path.join(get_app_dir(), "config.json")
-
-
-def resource_path(relative):
-    """获取内置资源路径（打包后从 sys._MEIPASS 取，开发态从源码目录取）。
-    仅用于程序自带的只读资源（如图标），不用于用户配置。
-    """
-    base = getattr(sys, "_MEIPASS", get_app_dir())
-    return os.path.join(base, relative)
 
 # 全局监控动作选项
 MONITOR_ACTIONS = ["enter", "esc", "close_window", "click_image", "custom_key"]
@@ -90,9 +73,10 @@ class App(ctk.CTk):
     def _try_set_icon(self):
         """尝试设置窗口图标，失败则静默跳过（不影响使用）。"""
         try:
-            ico = resource_path("assets/app.ico")
-            if os.path.exists(ico):
-                self.iconbitmap(ico)
+            assets = resource_path("assets")
+            icon_path = get_app_icon(assets)
+            if icon_path:
+                set_window_icon(self, icon_path)
         except Exception:
             pass
 
@@ -128,8 +112,10 @@ class App(ctk.CTk):
         tree_frame.pack(fill="both", expand=True, padx=8, pady=4)
         style = ttk.Style()
         style.theme_use("default")
-        style.configure("Treeview", rowheight=26, font=("Microsoft YaHei", 11))
-        style.configure("Treeview.Heading", font=("Microsoft YaHei", 11, "bold"))
+        ui_font = get_ui_font(11)
+        ui_font_bold = get_ui_font(11, bold=True)
+        style.configure("Treeview", rowheight=26, font=ui_font)
+        style.configure("Treeview.Heading", font=ui_font_bold)
 
         self.tree = ttk.Treeview(tree_frame,
                                  columns=("idx", "type", "desc", "comment", "enabled"),
@@ -184,7 +170,8 @@ class App(ctk.CTk):
         right.pack_propagate(False)
 
         ctk.CTkLabel(right, text="运行日志", font=ctk.CTkFont(size=15, weight="bold")).pack(anchor="w", padx=12, pady=(12, 4))
-        self.log_box = ctk.CTkTextbox(right, font=("Consolas", 11), wrap="word")
+        mono_font = get_mono_font(11)
+        self.log_box = ctk.CTkTextbox(right, font=mono_font, wrap="word")
         self.log_box.pack(fill="both", expand=True, padx=8, pady=4)
         self.log_box.configure(state="disabled")
 
@@ -391,23 +378,17 @@ class App(ctk.CTk):
         self._save_config()
 
     def _setup_hotkeys(self):
-        try:
-            import keyboard
-        except Exception:
-            self._log("未安装 keyboard 库，全局快捷键不可用", "warn")
+        if not hasattr(self, "_hotkey_mgr"):
+            self._hotkey_mgr = HotkeyManager()
+        if not self._hotkey_mgr.available:
+            self._log("未安装可用的全局快捷键库（pynput / keyboard），全局快捷键不可用", "warn")
             return
-        # 清理已注册的热键（记录在实例上）
-        if not hasattr(self, "_hk_hooks"):
-            self._hk_hooks = []
-        for h in self._hk_hooks:
-            try:
-                keyboard.remove_hotkey(h)
-            except Exception:
-                pass
-        self._hk_hooks = []
+        self._hotkey_mgr.remove_all()
         try:
-            self._hk_hooks.append(keyboard.add_hotkey(self.start_hotkey, self._on_start_hotkey, suppress=False))
-            self._hk_hooks.append(keyboard.add_hotkey(self.stop_hotkey, self._on_stop_hotkey, suppress=False))
+            ok1 = self._hotkey_mgr.add_hotkey(self.start_hotkey, self._on_start_hotkey)
+            ok2 = self._hotkey_mgr.add_hotkey(self.stop_hotkey, self._on_stop_hotkey)
+            if not ok1 or not ok2:
+                self._log("注册快捷键失败", "error")
         except Exception as e:
             self._log(f"注册快捷键失败：{e}", "error")
 
@@ -494,11 +475,8 @@ class App(ctk.CTk):
             self.executor.stop()
         self.monitor.stop()
         self._save_config()
-        try:
-            import keyboard
-            keyboard.unhook_all()
-        except Exception:
-            pass
+        if hasattr(self, "_hotkey_mgr"):
+            self._hotkey_mgr.remove_all()
         self.destroy()
 
 
@@ -564,7 +542,8 @@ class MonitorDialog(ctk.CTkToplevel):
         tree_frame = ctk.CTkFrame(self)
         tree_frame.pack(fill="both", expand=True, padx=12, pady=4)
         style = ttk.Style()
-        style.configure("Treeview", rowheight=24, font=("Microsoft YaHei", 10))
+        mono_font_small = get_ui_font(10)
+        style.configure("Treeview", rowheight=24, font=mono_font_small)
         self.tree = ttk.Treeview(tree_frame,
                                  columns=("name", "type", "target", "action", "enabled"),
                                  show="headings")

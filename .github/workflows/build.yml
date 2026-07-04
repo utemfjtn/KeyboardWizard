@@ -1,15 +1,33 @@
-name: 打包 Windows exe
+name: 跨平台打包
 
-# 触发方式：手动运行 / 推送 tag 自动构建并发 Release
 on:
-  workflow_dispatch:        # 在 GitHub 网页手动点击运行
+  workflow_dispatch:
   push:
     tags:
       - "v*"
 
 jobs:
   build:
-    runs-on: windows-latest   # GitHub 免费提供的 Windows Server
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: Windows
+            artifact_name: 按键精灵-windows
+            ext: exe
+          - os: macos-latest
+            name: macOS
+            artifact_name: 按键精灵-macos
+            ext: app
+          - os: ubuntu-latest
+            name: Linux
+            artifact_name: 按键精灵-linux
+            ext: bin
+
+    runs-on: ${{ matrix.os }}
+    name: 构建 ${{ matrix.name }} 版本
+
     steps:
       - name: 检出代码
         uses: actions/checkout@v4
@@ -20,41 +38,76 @@ jobs:
           python-version: "3.11"
           cache: "pip"
 
+      - name: 安装系统依赖（Linux）
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-tk python3-xlib scrot python3-dev libxkbcommon-x11-0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xfixes0
+
       - name: 安装依赖
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: 打包（PyInstaller onefile）
+      - name: 打包（PyInstaller）
         run: |
           python -m PyInstaller --clean --noconfirm build.spec
 
-      - name: 重命名为中文名
+      - name: 整理产物（Windows）
+        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $exe = Get-ChildItem dist -Filter *.exe | Select-Object -First 1
           if ($exe) {
-            Rename-Item $exe.FullName "按键精灵.exe"
-            Write-Host "产物：dist\按键精灵.exe"
+            Write-Host "产物：$($exe.FullName)"
           }
 
-      - name: 上传 exe 产物（手动触发时）
+      - name: 整理产物（macOS）
+        if: runner.os == 'macOS'
+        run: |
+          ls -la dist/
+
+      - name: 整理产物（Linux）
+        if: runner.os == 'Linux'
+        run: |
+          ls -la dist/
+
+      - name: 上传产物（手动触发时）
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: 按键精灵-exe
-          path: dist/*.exe
+          name: ${{ matrix.artifact_name }}
+          path: |
+            dist/*.exe
+            dist/*.app
+            dist/按键精灵
           if-no-files-found: error
 
       - name: 发布 Release（打 tag 时自动）
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.exe
+          files: |
+            dist/*.exe
+            dist/*.app
+            dist/按键精灵
           name: 按键精灵 ${{ github.ref_name }}
           body: |
             ## 使用方法
 
-            1. 下载下方的 `按键精灵.exe`（约 40-60 MB）
+            ### Windows
+            1. 下载 `按键精灵.exe`（约 40-60 MB）
             2. 双击即可运行，无需安装 Python
             3. 如按键/截图无反应，右键 → 以管理员身份运行
+
+            ### macOS
+            1. 下载 `按键精灵.app`（约 50-70 MB）
+            2. 拖入应用程序文件夹即可运行
+            3. 首次运行需在「系统设置 → 隐私与安全性」中允许打开
+            4. 需在「辅助功能」和「屏幕录制」中授予权限
+
+            ### Linux
+            1. 下载 `按键精灵`（约 40-60 MB）
+            2. 添加执行权限：`chmod +x 按键精灵`
+            3. 运行：`./按键精灵`
+            4. 建议使用 X11 会话（Wayland 下截图可能受限制）

@@ -1,8 +1,8 @@
 # 按键精灵 · Python 版
 
-基于 Python + customtkinter + pyautogui 的桌面自动化工具，类似商业软件"按键精灵"。支持可视化编排指令、图片识别点击、条件判断、循环、全局快捷键、全局弹窗监控等功能，可打包为独立 Windows exe。
+基于 Python + customtkinter + pyautogui 的桌面自动化工具，类似商业软件"按键精灵"。支持可视化编排指令、图片识别点击、条件判断、循环、全局快捷键、全局弹窗监控等功能，可打包为独立可执行文件。
 
-> 本程序面向 **Windows** 平台，`pyautogui` / `keyboard` / `pygetwindow` 在 Windows 上效果最佳。
+> **跨平台支持**：Windows / macOS / Linux，在各平台均提供一致的使用体验。
 
 ## 功能特性
 
@@ -44,12 +44,15 @@
 ├── executor.py          # 执行引擎（线程、循环、条件、跳转）
 ├── monitor.py           # 全局监控模块
 ├── image_capture.py     # 屏幕截图与坐标拾取工具
-├── build.spec           # PyInstaller 打包配置
+├── platform_utils.py    # 平台适配层（跨平台差异封装）
+├── build.spec           # PyInstaller 打包配置（支持三平台）
 ├── build.bat            # Windows 打包脚本
+├── build_mac.sh         # macOS 打包脚本
+├── build_linux.sh       # Linux 打包脚本
 ├── requirements.txt     # Python 依赖
 ├── assets/              # 资源目录（图标等）
 └── .github/workflows/
-    └── build.yml        # GitHub Actions 自动打包
+    └── build.yml        # GitHub Actions 三平台自动打包
 ```
 
 ## 快速开始
@@ -57,7 +60,19 @@
 ### 环境要求
 
 - Python 3.9+（推荐 3.11）
-- Windows 系统（部分功能在 macOS/Linux 上可能受限）
+- 支持系统：Windows 10+ / macOS 11+ / Linux (X11)
+
+### 平台额外依赖
+
+**macOS**：
+- 首次运行需在「系统设置 → 隐私与安全性 → 辅助功能」中授予权限
+- 截图功能需在「屏幕录制」中授予权限
+
+**Linux**：
+- 需安装 `python3-tk`、`python3-xlib`、`scrot` 等系统依赖
+- 建议使用 X11 会话（Wayland 下全局快捷键和截图可能受限）
+  - Debian/Ubuntu: `sudo apt install python3-tk python3-xlib scrot`
+  - Fedora: `sudo dnf install python3-tkinter python3-xlib scrot`
 
 ### 安装依赖
 
@@ -73,11 +88,17 @@ python main.py
 
 启动时会自动检查依赖，缺失则弹出提示。
 
-## 打包为 Windows exe
+## 打包为可执行文件
 
-### 方式一：本地打包
+> **重要**：PyInstaller 不支持交叉编译，需在对应操作系统上打包对应平台的产物。
+
+### Windows
 
 ```bash
+# 方式一：使用打包脚本
+build.bat
+
+# 方式二：直接执行
 python -m PyInstaller --clean --noconfirm build.spec
 ```
 
@@ -85,9 +106,42 @@ python -m PyInstaller --clean --noconfirm build.spec
 
 > 如按键/截图无反应，请右键 → **以管理员身份运行**。
 
-### 方式二：GitHub Actions 自动打包
+### macOS
 
-推送 `v*` 标签（如 `v1.0.0`）会自动触发 Release 构建，也可在 Actions 页面手动运行 "打包 Windows exe" 工作流。
+```bash
+# 方式一：使用打包脚本
+chmod +x build_mac.sh
+./build_mac.sh
+
+# 方式二：直接执行
+python3 -m PyInstaller --clean --noconfirm build.spec
+```
+
+产物位于 `dist/按键精灵.app`，约 50-70 MB。
+
+> 首次运行需在「系统设置 → 隐私与安全性」中允许打开，并授予辅助功能/屏幕录制权限。
+
+### Linux
+
+```bash
+# 方式一：使用打包脚本
+chmod +x build_linux.sh
+./build_linux.sh
+
+# 方式二：直接执行
+python3 -m PyInstaller --clean --noconfirm build.spec
+```
+
+产物位于 `dist/按键精灵`，约 40-60 MB。
+
+```bash
+chmod +x dist/按键精灵
+./dist/按键精灵
+```
+
+### GitHub Actions 自动打包
+
+推送 `v*` 标签（如 `v1.0.0`）会自动触发三平台 Release 构建，也可在 Actions 页面手动运行 "跨平台打包" 工作流。
 
 ## 使用说明
 
@@ -161,7 +215,9 @@ python -m PyInstaller --clean --noconfirm build.spec
 ### 中文输入
 
 - 纯 ASCII 文本使用 `pyautogui.write()`
-- 含中文等非 ASCII 字符时，自动回退到 `pyperclip` 剪贴板 + `ctrl+v` 粘贴
+- 含中文等非 ASCII 字符时，自动回退到 `pyperclip` 剪贴板粘贴
+  - Windows / Linux：`Ctrl + V`
+  - macOS：`Command + V`
 
 ## 依赖清单
 
@@ -171,18 +227,49 @@ python -m PyInstaller --clean --noconfirm build.spec
 | pyautogui | 键盘/鼠标模拟、图片识别、截图 |
 | opencv-python | 图片匹配底层支持 |
 | Pillow | 图像处理 |
-| keyboard | 全局快捷键监听 |
-| pygetwindow | 窗口操作与枚举 |
+| pynput | 跨平台全局快捷键监听 |
+| pygetwindow | 窗口操作（Windows/Linux） |
+| pywinctl | 窗口操作（跨平台，pygetwindow 的继任者） |
 | pyperclip | 剪贴板操作（中文输入） |
 | numpy | 数值计算 |
-| pyinstaller | 打包为 exe |
+| pyinstaller | 打包为可执行文件 |
+
+> **说明**：`keyboard` 库已替换为 `pynput` 以提供更好的跨平台支持；`pywinctl` 作为 `pygetwindow` 的补充，在 macOS 上提供窗口操作能力。
+
+## 平台差异说明
+
+### 全局快捷键
+
+- **Windows**：使用 `pynput`（首选）或 `keyboard` 库，功能完整
+- **macOS**：使用 `pynput`，需在「辅助功能」中授予权限
+- **Linux**：使用 `pynput`，X11 下工作正常；Wayland 下可能受限
+
+### 窗口操作
+
+- **Windows**：`pygetwindow` + `pywinctl` 双后端支持
+- **macOS**：使用 `pywinctl`，需授予「辅助功能」和「自动化」权限
+- **Linux**：使用 `pywinctl`，依赖 X11 的窗口管理能力
+
+### 截图与图片识别
+
+- **Windows**：基于 `pyautogui` + OpenCV，功能完整
+- **macOS**：需授予「屏幕录制」权限
+- **Linux**：X11 下正常；Wayland 环境需使用 `scrot` 或桌面环境的截图接口
 
 ## 注意事项
 
-1. **管理员权限**：部分游戏或高权限程序可能拦截模拟输入，以管理员身份运行可解决
-2. **DPI 缩放**：高 DPI 屏幕下图片识别可能不准确，建议 100% 缩放
+1. **权限问题**：
+   - Windows：部分高权限程序可能拦截模拟输入，以管理员身份运行可解决
+   - macOS：需在「系统设置 → 隐私与安全性」中授予辅助功能、屏幕录制、自动化权限
+   - Linux：Wayland 下全局快捷键和截图可能受限，建议切换到 X11 会话
+
+2. **DPI 缩放**：高 DPI / Retina 屏幕下图片识别可能不准确，建议截图时使用 100% 缩放
+
 3. **安全提示**：请勿用于恶意用途，使用时请确保能随时按 `F7` 停止
+
 4. **数据安全**：`config.json` 保存于程序同级目录，包含所有指令与设置，请勿分享敏感信息
+
+5. **打包限制**：PyInstaller 不支持交叉编译，必须在目标平台上构建对应平台的可执行文件
 
 ## License
 

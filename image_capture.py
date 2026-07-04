@@ -35,13 +35,15 @@ class RegionCapture:
         # 使用 tkinter 显示并选择
         import tkinter as tk
         from PIL import Image, ImageTk
+        from platform_utils import get_ui_font
 
         root = tk.Tk()
         root.attributes("-fullscreen", True)
         root.attributes("-topmost", True)
         # 提示条
+        ui_font = get_ui_font(14)
         info = tk.Label(root, text="拖动鼠标选择区域，按 Esc 取消",
-                        fg="white", bg="black", font=("Microsoft YaHei", 14))
+                        fg="white", bg="black", font=ui_font)
         info.pack(side="top", fill="x")
 
         canvas = tk.Canvas(root, cursor="cross", highlightthickness=0)
@@ -107,17 +109,20 @@ def pick_position():
     try:
         import pyautogui
         import tkinter as tk
+        from platform_utils import get_ui_font
     except Exception as e:
         raise RuntimeError(f"无法导入所需模块：{e}")
 
     root = tk.Tk()
     root.attributes("-fullscreen", True)
     root.attributes("-topmost", True)
+    ui_font = get_ui_font(14)
+    ui_font_small = get_ui_font(12)
     info = tk.Label(root, text="移动并点击鼠标以获取坐标，按 Esc 取消",
-                    fg="white", bg="black", font=("Microsoft YaHei", 14))
+                    fg="white", bg="black", font=ui_font)
     info.pack(side="top", fill="x")
     lbl = tk.Label(root, text="", fg="yellow", bg="black",
-                   font=("Microsoft YaHei", 12))
+                   font=ui_font_small)
     lbl.place(x=20, y=40)
 
     result = {"pos": None}
