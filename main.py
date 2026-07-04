@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-按键精灵（Python 版）入口
+KeyboardWizard · 按键精灵 入口
 运行： python main.py
 依赖： pip install -r requirements.txt
 跨平台支持：Windows / macOS / Linux

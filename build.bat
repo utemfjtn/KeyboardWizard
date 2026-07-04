@@ -2,10 +2,10 @@
 chcp 65001 >nul
 setlocal enabledelayedexpansion
 
-title 按键精灵 - 一键打包
+title KeyboardWizard - 一键打包
 
 echo ============================================
-echo   按键精灵（Python 版） - 打包为单文件 exe
+echo   KeyboardWizard（按键精灵）- 打包为单文件 exe
 echo ============================================
 echo.
 
@@ -46,7 +46,7 @@ if errorlevel 1 (
 echo.
 echo [4/4] 完成！
 echo.
-echo  输出文件：%~dp0dist\按键精灵.exe
+echo  输出文件：%~dp0dist\KeyboardWizard.exe
 echo  大小约 40-60 MB（首次启动解压到临时目录，稍慢）
 echo.
 echo  直接双击 exe 即可运行，无需安装 Python

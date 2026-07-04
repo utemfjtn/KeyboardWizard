@@ -49,7 +49,7 @@ MONITOR_ACTION_NAMES = {
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("按键精灵 · Python 版")
+        self.title("KeyboardWizard · 按键精灵")
         self.geometry("1000x680")
         self.minsize(900, 600)
         self._try_set_icon()

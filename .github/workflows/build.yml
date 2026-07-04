@@ -76,11 +76,11 @@ jobs:
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact_name }}
+          name: KeyboardWizard-${{ matrix.name }}
           path: |
             dist/*.exe
             dist/*.app
-            dist/按键精灵
+            dist/KeyboardWizard
           if-no-files-found: error
 
       - name: 发布 Release（打 tag 时自动）
@@ -90,24 +90,24 @@ jobs:
           files: |
             dist/*.exe
             dist/*.app
-            dist/按键精灵
-          name: 按键精灵 ${{ github.ref_name }}
+            dist/KeyboardWizard
+          name: KeyboardWizard ${{ github.ref_name }}
           body: |
             ## 使用方法
 
             ### Windows
-            1. 下载 `按键精灵.exe`（约 40-60 MB）
+            1. 下载 `KeyboardWizard.exe`（约 40-60 MB）
             2. 双击即可运行，无需安装 Python
             3. 如按键/截图无反应，右键 → 以管理员身份运行
 
             ### macOS
-            1. 下载 `按键精灵.app`（约 50-70 MB）
+            1. 下载 `KeyboardWizard.app`（约 50-70 MB）
             2. 拖入应用程序文件夹即可运行
             3. 首次运行需在「系统设置 → 隐私与安全性」中允许打开
             4. 需在「辅助功能」和「屏幕录制」中授予权限
 
             ### Linux
-            1. 下载 `按键精灵`（约 40-60 MB）
-            2. 添加执行权限：`chmod +x 按键精灵`
-            3. 运行：`./按键精灵`
+            1. 下载 `KeyboardWizard`（约 40-60 MB）
+            2. 添加执行权限：`chmod +x KeyboardWizard`
+            3. 运行：`./KeyboardWizard`
             4. 建议使用 X11 会话（Wayland 下截图可能受限制）

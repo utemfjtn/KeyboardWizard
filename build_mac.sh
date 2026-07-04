@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
 
-APP_NAME="按键精灵"
+APP_NAME="KeyboardWizard"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "============================================"
-echo "  按键精灵（Python 版）- macOS 打包脚本"
+echo "  KeyboardWizard（按键精灵）- macOS 打包脚本"
 echo "============================================"
 echo ""
 
@@ -32,7 +32,6 @@ echo ""
 echo "[4/4] 完成！"
 echo ""
 echo "  输出文件：$SCRIPT_DIR/dist/$APP_NAME.app"
-echo "  大小约 50-70 MB"
 echo ""
 echo "  直接双击 app 即可运行，无需安装 Python"
 echo ""

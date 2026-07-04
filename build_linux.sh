@@ -1,11 +1,11 @@
 #!/bin/bash
 set -e
 
-APP_NAME="按键精灵"
+APP_NAME="KeyboardWizard"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 echo "============================================"
-echo "  按键精灵（Python 版）- Linux 打包脚本"
+echo "  KeyboardWizard（按键精灵）- Linux 打包脚本"
 echo "============================================"
 echo ""
 

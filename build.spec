@@ -1,6 +1,6 @@
 # -*- mode: python ; coding: utf-8 -*-
 """
-PyInstaller 打包配置：按键精灵 · Python 版
+PyInstaller 打包配置：KeyboardWizard · 按键精灵
 跨平台：Windows (exe) / macOS (app) / Linux (binary)
 生成：pyinstaller build.spec
 注意：PyInstaller 不支持交叉编译，需在对应平台上打包
@@ -72,7 +72,7 @@ elif IS_LINUX:
 if icon_path and not os.path.exists(icon_path):
     icon_path = None
 
-app_name = "按键精灵"
+app_name = "KeyboardWizard"
 if IS_WINDOWS:
     exe = EXE(
         pyz,
