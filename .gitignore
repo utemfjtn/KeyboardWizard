@@ -1,0 +1,20 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+
+# PyInstaller
+build/
+dist/
+*.spec.bak
+
+# 运行时生成的配置（每个用户自己的，不应提交）
+config.json
+
+# 截图临时文件
+region_*.png
+_region_full.png
+
+# IDE
+.vscode/
+.idea/
