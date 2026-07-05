@@ -150,8 +150,9 @@ jobs:
             2. 解压后拖入应用程序文件夹
             3. 首次运行需在「系统设置 → 隐私与安全性」中允许打开
             4. **若 .app 闪退**：先删除旧的 .app 再放入新版本（避免旧签名缓存）
-            5. 需在「辅助功能」和「输入监控」中授予权限
-            6. 若仍崩溃，查看 `~/Library/Application Support/KeyboardWizard/crash.log`
+            5. 需在「辅助功能」中授予权限（全局快捷键和鼠标控制必需）
+            6. **重要**：授权辅助功能权限后，必须重启 KeyboardWizard 才能生效
+            7. 若仍崩溃，查看 `~/Library/Application Support/KeyboardWizard/crash.log`
 
             ### Linux
             1. 下载 `KeyboardWizard-linux`（约 40-60 MB）
