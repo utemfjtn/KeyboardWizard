@@ -42,6 +42,7 @@ def main() -> int:
     run_id = os.environ.get("KW_RUN_ID", "")
     sha = os.environ.get("KW_SHA", "")[:7]
     changelog = os.environ.get("KW_CHANGELOG", "（无变更说明）")
+    changelog = changelog.replace("\\n", "\n")
     actor = os.environ.get("KW_ACTOR", "")
     at_mobiles_str = os.environ.get("LARK_AT_MOBILES", "").strip()
     at_all = os.environ.get("LARK_AT_ALL", "false").strip().lower() == "true"
