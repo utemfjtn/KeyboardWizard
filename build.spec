@@ -189,7 +189,7 @@ elif IS_MACOS:
         info_plist={
             "NSHighResolutionCapable": True,
             "LSUIElement": False,
-            "CFBundleShortVersionString": "1.0.0",
+            "CFBundleShortVersionString": "1.3.2",
             "NSMicrophoneUsageDescription": "本应用不使用麦克风",
             "NSCameraUsageDescription": "本应用不使用摄像头",
             "NSAppleEventsUsageDescription": "用于控制其他应用窗口",

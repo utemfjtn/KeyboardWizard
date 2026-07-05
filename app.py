@@ -32,7 +32,7 @@ ctk.set_default_color_theme("blue")
 
 DEFAULT_START_HOTKEY = "f6"
 DEFAULT_STOP_HOTKEY = "f7"
-VERSION = "1.2.5"
+VERSION = "1.3.2"
 
 CONFIG_FILE = os.path.join(get_app_dir(), "config.json")
 
@@ -704,7 +704,7 @@ class MonitorRuleDialog(ctk.CTkToplevel):
         self._param_box.pack(fill="both", expand=True, padx=12, pady=4)
         self._rebuild_params()
 
-        ctk.CTkCheckBox(self, text="启用", variable=self.enabled_var).pack(anchor="w", padx=108, pady=4)
+        ctk.CTkCheckBox(self, text="启用", variable=self.enabled_var).pack(anchor="w", padx=8, pady=4)
 
         bf = ctk.CTkFrame(self, fg_color="transparent")
         bf.pack(fill="x", padx=12, pady=10)
@@ -714,18 +714,18 @@ class MonitorRuleDialog(ctk.CTkToplevel):
 
     def _row(self, label, widget):
         f = ctk.CTkFrame(self._param_box, fg_color="transparent")
-        f.pack(fill="x", padx=4, pady=4)
-        ctk.CTkLabel(f, text=label, width=90, anchor="e").pack(side="left")
-        widget.pack(side="left", fill="x", expand=True, padx=(8, 0))
+        f.pack(fill="x", padx=8, pady=4)
+        ctk.CTkLabel(f, text=label).pack(side="left", padx=(0, 8))
+        widget.pack(side="left", fill="x", expand=True)
         return f
 
     def _image_row(self, label, var):
         f = ctk.CTkFrame(self._param_box, fg_color="transparent")
-        f.pack(fill="x", padx=4, pady=4)
-        ctk.CTkLabel(f, text=label, width=90, anchor="e").pack(side="left")
-        ctk.CTkEntry(f, textvariable=var).pack(side="left", fill="x", expand=True, padx=(8, 4))
-        ctk.CTkButton(f, text="截图", width=60, command=lambda: self._capture(var)).pack(side="left")
-        ctk.CTkButton(f, text="文件", width=60, command=lambda: self._pick_file(var)).pack(side="left", padx=4)
+        f.pack(fill="x", padx=8, pady=4)
+        ctk.CTkLabel(f, text=label).pack(side="left", padx=(0, 8))
+        ctk.CTkEntry(f, textvariable=var).pack(side="left", fill="x", expand=True, padx=(0, 8))
+        ctk.CTkButton(f, text="截图", width=60, command=lambda: self._capture(var)).pack(side="left", padx=(0, 4))
+        ctk.CTkButton(f, text="文件", width=60, command=lambda: self._pick_file(var)).pack(side="left")
         return f
 
     def _rebuild_params(self):
@@ -738,7 +738,7 @@ class MonitorRuleDialog(ctk.CTkToplevel):
         if self.type_var.get() == "window":
             self._row("窗口标题：", ctk.CTkEntry(self._param_box, textvariable=self.title_var))
             ctk.CTkLabel(self._param_box, text="（模糊匹配，包含关键词即触发）",
-                         text_color="gray").pack(anchor="w", padx=108)
+                         text_color="gray").pack(anchor="w", padx=8, pady=(0, 4))
         else:
             self._image_row("图片：", self.image_var)
             self._row("置信度：", ctk.CTkEntry(self._param_box, textvariable=self.conf_var, width=80))
@@ -749,7 +749,7 @@ class MonitorRuleDialog(ctk.CTkToplevel):
         if act == "custom_key":
             self._row("动作按键：", ctk.CTkEntry(self._param_box, textvariable=self.action_key_var, width=120))
             ctk.CTkLabel(self._param_box, text="（组合键用 + 连接，如 ctrl+s）",
-                         text_color="gray").pack(anchor="w", padx=108)
+                         text_color="gray").pack(anchor="w", padx=8, pady=(0, 4))
         elif act == "click_image":
             self._image_row("动作图片：", self.action_image_var)
 
