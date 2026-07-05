@@ -161,3 +161,53 @@ jobs:
             2. 添加执行权限：`chmod +x KeyboardWizard-linux`
             3. 运行：`./KeyboardWizard-linux`
             4. 建议使用 X11 会话（Wayland 下截图可能受限制）
+
+  # 飞书通知 job：构建/发布完成后发送汇总消息
+  # 通知对象通过 GitHub Secrets 配置，方便后续增删不改代码：
+  #   LARK_WEBHOOK_URL  飞书群机器人 webhook（决定发到哪个群，必填）
+  #   LARK_AT_MOBILES   @ 的手机号，逗号分隔（可选）
+  #   LARK_AT_ALL       是否 @ 全员 true/false（可选）
+  notify:
+    needs: [build, release]
+    if: always()
+    runs-on: ubuntu-latest
+    name: 飞书构建通知
+
+    steps:
+      - name: 检出代码
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 获取变更内容
+        id: changelog
+        run: |
+          # 获取上一个 tag 到当前的 commit messages
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -n "$PREV_TAG" ]; then
+            MSG=$(git log --pretty=format:"- %s" "$PREV_TAG..HEAD" | head -20)
+          else
+            MSG=$(git log --pretty=format:"- %s" -5)
+          fi
+          {
+            echo "msg<<EOF"
+            echo "$MSG"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: 发送飞书通知
+        env:
+          # 通知配置（来自 GitHub Secrets，未配置则跳过）
+          LARK_WEBHOOK_URL: ${{ secrets.LARK_WEBHOOK_URL }}
+          LARK_AT_MOBILES: ${{ secrets.LARK_AT_MOBILES }}
+          LARK_AT_ALL: ${{ secrets.LARK_AT_ALL }}
+          # 构建上下文（由 workflow 注入）
+          KW_VERSION: ${{ github.ref_name }}
+          KW_BUILD_RESULT: ${{ needs.build.result }}
+          KW_RELEASE_RESULT: ${{ needs.release.result }}
+          KW_REPO: ${{ github.repository }}
+          KW_RUN_ID: ${{ github.run_id }}
+          KW_SHA: ${{ github.sha }}
+          KW_ACTOR: ${{ github.actor }}
+          KW_CHANGELOG: ${{ steps.changelog.outputs.msg }}
+        run: python3 scripts/notify_lark.py

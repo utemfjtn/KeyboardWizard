@@ -271,6 +271,36 @@ chmod +x dist/按键精灵
 
 5. **打包限制**：PyInstaller 不支持交叉编译，必须在目标平台上构建对应平台的可执行文件
 
+## 飞书构建通知（可选）
+
+CI/CD 构建完成后可自动把汇总消息（构建状态、变更内容、测试验证步骤、Release 下载地址）发送到指定飞书群。通知对象通过 GitHub Secrets 配置，后续增删无需改代码。
+
+### 配置步骤
+
+1. **创建飞书自定义机器人**（决定发到哪个群）
+   - 打开目标飞书群 → 「设置」→「群机器人」→「添加机器人」→「自定义机器人」
+   - 复制 webhook 地址（形如 `https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx`）
+   - （可选）设置安全策略：自定义关键词填 `KeyboardWizard`，或加签
+
+2. **配置 GitHub Secrets**（决定 @ 谁）
+   - 仓库页面 → `Settings` → `Secrets and variables` → `Actions` → `New repository secret`
+   - 添加以下 Secret：
+
+   | Secret 名 | 必填 | 说明 | 示例 |
+   |-----------|------|------|------|
+   | `LARK_WEBHOOK_URL` | 是 | 飞书群机器人 webhook 地址 | `https://open.feishu.cn/open-apis/bot/v2/hook/xxx` |
+   | `LARK_AT_MOBILES` | 否 | 需要 @ 的手机号，逗号分隔 | `13800138000,13900139000` |
+   | `LARK_AT_ALL` | 否 | 是否 @ 全员，`true`/`false` | `false` |
+
+3. **触发构建**：打 tag（如 `git tag v1.2.4 && git push origin v1.2.4`）或手动 `workflow_dispatch`，构建完成后飞书群会收到汇总消息。
+
+### 通知对象管理
+
+- **更换群**：修改 `LARK_WEBHOOK_URL` 为新群的机器人地址
+- **增加 @ 的人**：在 `LARK_AT_MOBILES` 追加手机号（逗号分隔）
+- **@ 全员**：设 `LARK_AT_ALL` 为 `true`
+- **关闭通知**：删除 `LARK_WEBHOOK_URL`（脚本检测到为空会自动跳过，不报错）
+
 ## License
 
 MIT
