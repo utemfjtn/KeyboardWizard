@@ -275,31 +275,92 @@ chmod +x dist/按键精灵
 
 CI/CD 构建完成后可自动把汇总消息（构建状态、变更内容、测试验证步骤、Release 下载地址）发送到指定飞书群。通知对象通过 GitHub Secrets 配置，后续增删无需改代码。
 
-### 配置步骤
+### 第一步：获取飞书群机器人 webhook 地址
 
-1. **创建飞书自定义机器人**（决定发到哪个群）
-   - 打开目标飞书群 → 「设置」→「群机器人」→「添加机器人」→「自定义机器人」
-   - 复制 webhook 地址（形如 `https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx`）
-   - （可选）设置安全策略：自定义关键词填 `KeyboardWizard`，或加签
+webhook 地址是一串 URL，形如 `https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx`，发消息到这个 URL 等同于在群里说话。获取步骤：
 
-2. **配置 GitHub Secrets**（决定 @ 谁）
-   - 仓库页面 → `Settings` → `Secrets and variables` → `Actions` → `New repository secret`
-   - 添加以下 Secret：
+#### 方式 A：飞书桌面端 / 移动端（推荐）
 
-   | Secret 名 | 必填 | 说明 | 示例 |
-   |-----------|------|------|------|
-   | `LARK_WEBHOOK_URL` | 是 | 飞书群机器人 webhook 地址 | `https://open.feishu.cn/open-apis/bot/v2/hook/xxx` |
-   | `LARK_AT_MOBILES` | 否 | 需要 @ 的手机号，逗号分隔 | `13800138000,13900139000` |
-   | `LARK_AT_ALL` | 否 | 是否 @ 全员，`true`/`false` | `false` |
+1. 打开飞书，进入你想接收通知的**群聊**
+2. 点击群聊右上角的 **「...」**（更多）按钮 → 进入**「设置」**
+3. 在设置面板中找到 **「群机器人」**（旧版叫「Bots」）→ 点击 **「添加机器人」**
+4. 在机器人类型列表中选择 **「自定义机器人 - 通过 Webhook 发送消息到群」**
+5. 填写机器人信息：
+   - **机器人名称**：随便填，如 `KeyboardWizard 构建通知`
+   - **描述**：可留空
+6. **安全设置**（三选一，必须选至少一种）：
+   - **自定义关键词**（推荐）：填 `KeyboardWizard`。机器人只允许发送包含此关键词的消息，本项目通知内容里都有 `KeyboardWizard`，所以选这个最简单
+   - **签名校验**：更安全但配置复杂，需要在 GitHub Secret 里额外存 `LARK_SIGN_SECRET`（本项目暂未实现签名校验）
+   - **IP 地址白名单**：填 GitHub Actions 的 IP 段（不稳定，不推荐，因为 GitHub 的出口 IP 经常变）
+7. 点击 **「添加」**，页面会显示一段 **webhook 地址**，**立即复制保存**（关闭页面后只能重新创建机器人才能再看到）
+8. 点击「完成」，群里会出现「机器人已加入」的提示
 
-3. **触发构建**：打 tag（如 `git tag v1.2.4 && git push origin v1.2.4`）或手动 `workflow_dispatch`，构建完成后飞书群会收到汇总消息。
+> 提示：webhook 地址关闭页面后无法再次查看，但可以在「群机器人」列表里删除重建。如果地址泄露，**立即在「群机器人」列表删除该机器人**并重建。
 
-### 通知对象管理
+#### 方式 B：飞书开放平台（企业自建应用，适合多群通知）
 
-- **更换群**：修改 `LARK_WEBHOOK_URL` 为新群的机器人地址
-- **增加 @ 的人**：在 `LARK_AT_MOBILES` 追加手机号（逗号分隔）
-- **@ 全员**：设 `LARK_AT_ALL` 为 `true`
-- **关闭通知**：删除 `LARK_WEBHOOK_URL`（脚本检测到为空会自动跳过，不报错）
+如果你是企业管理员，想用一个机器人通知多个群或做更复杂的功能：
+
+1. 访问 [https://open.feishu.cn/app](https://open.feishu.cn/app) → 登录
+2. **创建企业自建应用** → 填写应用名称和描述
+3. 应用详情页左侧 → **「机器人」** → 启用机器人能力
+4. 左侧 **「权限管理」** → 开通 `im:message:send_as_bot`（以机器人身份发消息）
+5. **「版本管理与发布」** → 创建版本 → 提交管理员审核（个人开发可自审自批）
+6. 审核通过后，在应用详情页 **「凭证与基础信息」** 拿到 `App ID` 和 `App Secret`
+7. 在目标群里 **「设置 → 群机器人 → 添加机器人」** → 选择刚创建的应用
+
+> 方式 B 需要应用通过 OAuth 换 access_token，本项目脚本暂未实现，需要改造 `scripts/notify_lark.py`。如果只是简单的群通知，**用方式 A 即可**。
+
+### 第二步：配置 GitHub Secrets
+
+1. 打开仓库页面（如 `https://github.com/utemfjtn/KeyboardWizard`）
+2. 顶部 Tab → **`Settings`**
+3. 左侧菜单 → **`Secrets and variables`** → **`Actions`**
+4. 页面顶部 **`Repository secrets`** 区域 → 点击 **`New repository secret`**
+5. 逐个添加以下 Secret（每个都要点一次 `New repository secret`）：
+
+   | Secret 名 | 必填 | 说明 | 示例值 |
+   |-----------|------|------|--------|
+   | `LARK_WEBHOOK_URL` | **是** | 第一步获取的飞书 webhook 地址 | `https://open.feishu.cn/open-apis/bot/v2/hook/xxxxxxxx` |
+   | `LARK_AT_MOBILES` | 否 | 构建/发布完成时 @ 的手机号，逗号分隔，**必须是群成员的手机号** | `13800138000,13900139000` |
+   | `LARK_AT_ALL` | 否 | 是否 @ 全员，`true` 或 `false`，默认 `false` | `false` |
+
+6. 添加完后，`Repository secrets` 列表里会显示这三个 Secret 的名字（**值不可再次查看**，只能更新或删除）
+
+> 安全说明：GitHub Secrets 加密存储，Actions 日志中只会显示为 `***`，不会泄露 webhook 地址。
+
+### 第三步：触发构建验证
+
+1. 触发一次构建（任选一种）：
+   - **打 tag**：`git tag v1.2.4 && git push origin v1.2.4`（自动构建并发布）
+   - **手动触发**：仓库 → `Actions` → 选择 `跨平台打包` workflow → `Run workflow`
+2. 构建完成后，飞书群会收到一条汇总消息，包含：
+   - 构建状态（成功 / 失败）
+   - 版本号 + commit + 触发者
+   - 变更内容（git log）
+   - 测试验证步骤
+   - Release / Actions 下载地址
+3. 如果配置了 `LARK_AT_MOBILES`，对应手机号的群成员会被 @
+
+### 通知对象管理（无需改代码）
+
+| 需求 | 操作 |
+|------|------|
+| **换群通知** | 重新在新群里创建机器人 → 用新 webhook 更新 `LARK_WEBHOOK_URL` |
+| **加 @ 的人** | 编辑 `LARK_AT_MOBILES`，追加手机号（逗号分隔） |
+| **@ 全员** | 设 `LARK_AT_ALL` 为 `true` |
+| **关闭通知** | 删除 `LARK_WEBHOOK_URL`（脚本检测到为空会自动跳过，不报错） |
+| **更换机器人** | 删旧机器人，建新机器人，更新 `LARK_WEBHOOK_URL`（webhook 泄露时这样做） |
+
+### 常见问题
+
+- **飞书收不到消息？** 检查：
+  1. Actions 日志里 `notify` job 是否成功（看 `[notify] ✅ 飞书通知发送成功`）
+  2. webhook 地址是否完整（必须以 `https://` 开头）
+  3. 安全策略如果是「自定义关键词」，消息内容必须包含该关键词（本项目用 `KeyboardWizard`）
+  4. `LARK_AT_MOBILES` 里的手机号必须是**群成员**的手机号，否则 @ 失败但消息仍会发送
+- **Actions 里显示 `未配置 LARK_WEBHOOK_URL，跳过飞书通知`？** Secret 名拼错了，必须是全大写 `LARK_WEBHOOK_URL`
+- **飞书返回 `token invalid` 或 `9499`？** webhook 地址被截断或机器人被删除，重新创建机器人
 
 ## License
 
