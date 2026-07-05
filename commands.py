@@ -30,10 +30,11 @@ LABEL = "label"                    # 标签（跳转目标）
 GOTO = "goto"                      # 跳转到标签
 LOOP = "loop"                      # 无限/有限循环（基于 label+goto 的高层封装）
 INPUT_TEXT = "input_text"          # 输入文本
+SET_VAR = "set_var"                # 设置变量
 
 # 所有指令类型
 ALL_TYPES = [
-    KEY, CLICK, IMAGE_CLICK, IMAGE_WAIT, INPUT_TEXT,
+    KEY, CLICK, IMAGE_CLICK, IMAGE_WAIT, INPUT_TEXT, SET_VAR,
     DELAY,
     REPEAT, END_REPEAT,
     IF_IMAGE, IF_NOT_IMAGE, IF_WINDOW, END_IF,
@@ -47,6 +48,7 @@ TYPE_NAMES = {
     IMAGE_CLICK:  "点击图片",
     IMAGE_WAIT:   "等待图片",
     INPUT_TEXT:   "输入文本",
+    SET_VAR:      "设置变量",
     DELAY:        "延时",
     REPEAT:       "重复开始",
     END_REPEAT:   "重复结束",
@@ -66,6 +68,7 @@ PARAM_SCHEMA = {
                    "clicks": 1, "region": None, "offset_x": 0, "offset_y": 0},
     IMAGE_WAIT:   {"image": "", "confidence": 0.8, "timeout": 10.0, "region": None},
     INPUT_TEXT:   {"text": "", "interval": 0.0},
+    SET_VAR:      {"name": "var1", "value": ""},
     DELAY:        {"ms": 1000},
     REPEAT:       {"count": 3},
     END_REPEAT:   {},
@@ -131,6 +134,10 @@ def describe(cmd: dict) -> str:
         return f"{name}：{p.get('name','')}"
     if t == GOTO:
         return f"{name}：{p.get('name','')}"
+    if t == SET_VAR:
+        var_name = p.get("name", "")
+        value = p.get("value", "")
+        return f"{name}：{var_name}={value}"
     return name
 
 

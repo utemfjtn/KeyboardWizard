@@ -32,7 +32,7 @@ ctk.set_default_color_theme("blue")
 
 DEFAULT_START_HOTKEY = "f6"
 DEFAULT_STOP_HOTKEY = "f7"
-VERSION = "1.2.5"
+VERSION = "2.0.0"
 
 CONFIG_FILE = os.path.join(get_app_dir(), "config.json")
 
@@ -57,9 +57,11 @@ class App(ctk.CTk):
 
         self.commands = []            # 命令列表
         self.executor = None
+        self.recorder = None         # 录制器
         self.monitor = GlobalMonitor(rules=[], on_log=self._log)
         self.start_hotkey = DEFAULT_START_HOTKEY
         self.stop_hotkey = DEFAULT_STOP_HOTKEY
+        self.record_hotkey = "f8"    # 录制快捷键
         self.monitor_rules = []
 
         self._build_menu()
@@ -188,6 +190,10 @@ class App(ctk.CTk):
                                       fg_color="#e74c3c", hover_color="#cb3728",
                                       command=self._stop, state="disabled")
         self.btn_stop.pack(side="left", padx=2)
+        self.btn_record = ctk.CTkButton(run_bar, text="● 录制 (F8)", width=120,
+                                        fg_color="#8e44ad", hover_color="#6c3483",
+                                        command=self._toggle_record)
+        self.btn_record.pack(side="left", padx=2)
         self.lbl_status = ctk.CTkLabel(run_bar, text="状态：就绪", text_color="gray")
         self.lbl_status.pack(side="left", padx=12)
         ctk.CTkLabel(run_bar, text=f"v{VERSION}", text_color="#666666",
@@ -303,9 +309,27 @@ class App(ctk.CTk):
             on_log=self._log,
             on_state=self._on_state,
             on_step=self._on_step,
+            on_error=self._on_exec_error,
         )
         self._set_running_ui(True)
         self.executor.start()
+
+    def _on_exec_error(self, error_msg, cmd_index):
+        """执行出错时的回调，弹出对话框让用户选择后续操作。"""
+        import queue
+        q = queue.Queue()
+        def show_dialog():
+            desc = C.describe(self.commands[cmd_index]) if cmd_index < len(self.commands) else "?"
+            result = messagebox.askyesnocancel(
+                "执行出错",
+                f"第 {cmd_index + 1} 条指令执行出错：\n\n"
+                f"指令：{desc}\n"
+                f"错误：{error_msg[:300]}\n\n"
+                f"是 = 重试\n否 = 跳过此指令\n取消 = 停止运行",
+            )
+            q.put({True: "retry", False: "skip", None: "stop"}[result])
+        self.after(0, show_dialog)
+        return q.get()  # 阻塞直到用户选择
 
     def _stop(self):
         if self.executor:
@@ -416,6 +440,7 @@ class App(ctk.CTk):
         try:
             ok1 = self._hotkey_mgr.add_hotkey(self.start_hotkey, self._on_start_hotkey)
             ok2 = self._hotkey_mgr.add_hotkey(self.stop_hotkey, self._on_stop_hotkey)
+            ok3 = self._hotkey_mgr.add_hotkey(self.record_hotkey, self._on_record_hotkey)
             if not ok1 or not ok2:
                 self._log("注册快捷键失败", "error")
         except Exception as e:
@@ -426,6 +451,59 @@ class App(ctk.CTk):
 
     def _on_stop_hotkey(self):
         self.after(0, self._stop)
+
+    def _on_record_hotkey(self):
+        self.after(0, self._toggle_record)
+
+    # ------------------------------------------------------------------ 录制
+    def _toggle_record(self):
+        """切换录制状态。"""
+        if self.recorder and self.recorder.is_recording():
+            self._stop_record()
+        else:
+            self._start_record()
+
+    def _start_record(self):
+        """开始录制鼠标键盘操作。"""
+        if self.executor and self.executor.is_running():
+            messagebox.showwarning("提示", "请先停止运行中的脚本")
+            return
+        try:
+            from recorder import Recorder
+        except Exception as e:
+            messagebox.showerror("录制不可用", f"录制模块加载失败：{e}")
+            return
+        self.recorder = Recorder(
+            on_log=self._log,
+            on_state=self._on_record_state,
+        )
+        # macOS 权限检查
+        from platform_utils import IS_MACOS, has_accessibility_permission
+        if IS_MACOS and not has_accessibility_permission():
+            self._log("警告：未授予辅助功能权限，录制可能无法工作", "warn")
+            self._log("请在「系统设置 → 隐私与安全性 → 辅助功能」中授权", "warn")
+        self.recorder.start()
+        self.btn_record.configure(text="■ 停止录制", fg_color="#c0392b", hover_color="#922b21")
+        self._log("开始录制，按 F8 或点击按钮停止", "info")
+
+    def _stop_record(self):
+        """停止录制，将录制的指令追加到列表。"""
+        if not self.recorder:
+            return
+        self.recorder.stop()
+        new_cmds = self.recorder.get_commands()
+        if new_cmds:
+            self.commands.extend(new_cmds)
+            self._refresh_list()
+            self._log(f"录制完成，新增 {len(new_cmds)} 条指令", "info")
+        else:
+            self._log("录制完成，未捕获到操作", "warn")
+
+    def _on_record_state(self, state):
+        def upd():
+            if state == "stopped":
+                self.btn_record.configure(text="● 录制 (F8)", fg_color="#8e44ad", hover_color="#6c3483")
+        self.after(0, upd)
 
     # ------------------------------------------------------------------ 文件操作
     def _new_file(self):
@@ -502,6 +580,8 @@ class App(ctk.CTk):
     def _on_close(self):
         if self.executor and self.executor.is_running():
             self.executor.stop()
+        if self.recorder and self.recorder.is_recording():
+            self.recorder.stop()
         self.monitor.stop()
         self._save_config()
         if hasattr(self, "_hotkey_mgr"):
@@ -676,7 +756,7 @@ class MonitorRuleDialog(ctk.CTkToplevel):
         self._param_box.pack(fill="both", expand=True, padx=12, pady=4)
         self._rebuild_params()
 
-        ctk.CTkCheckBox(self, text="启用", variable=self.enabled_var).pack(anchor="w", padx=108, pady=4)
+        ctk.CTkCheckBox(self, text="启用", variable=self.enabled_var).pack(anchor="w", padx=8, pady=4)
 
         bf = ctk.CTkFrame(self, fg_color="transparent")
         bf.pack(fill="x", padx=12, pady=10)
@@ -686,18 +766,18 @@ class MonitorRuleDialog(ctk.CTkToplevel):
 
     def _row(self, label, widget):
         f = ctk.CTkFrame(self._param_box, fg_color="transparent")
-        f.pack(fill="x", padx=4, pady=4)
-        ctk.CTkLabel(f, text=label, width=90, anchor="e").pack(side="left")
-        widget.pack(side="left", fill="x", expand=True, padx=(8, 0))
+        f.pack(fill="x", padx=8, pady=4)
+        ctk.CTkLabel(f, text=label).pack(side="left", padx=(0, 8))
+        widget.pack(side="left", fill="x", expand=True)
         return f
 
     def _image_row(self, label, var):
         f = ctk.CTkFrame(self._param_box, fg_color="transparent")
-        f.pack(fill="x", padx=4, pady=4)
-        ctk.CTkLabel(f, text=label, width=90, anchor="e").pack(side="left")
-        ctk.CTkEntry(f, textvariable=var).pack(side="left", fill="x", expand=True, padx=(8, 4))
-        ctk.CTkButton(f, text="截图", width=60, command=lambda: self._capture(var)).pack(side="left")
-        ctk.CTkButton(f, text="文件", width=60, command=lambda: self._pick_file(var)).pack(side="left", padx=4)
+        f.pack(fill="x", padx=8, pady=4)
+        ctk.CTkLabel(f, text=label).pack(side="left", padx=(0, 8))
+        ctk.CTkEntry(f, textvariable=var).pack(side="left", fill="x", expand=True, padx=(0, 8))
+        ctk.CTkButton(f, text="截图", width=60, command=lambda: self._capture(var)).pack(side="left", padx=(0, 4))
+        ctk.CTkButton(f, text="文件", width=60, command=lambda: self._pick_file(var)).pack(side="left")
         return f
 
     def _rebuild_params(self):
@@ -710,7 +790,7 @@ class MonitorRuleDialog(ctk.CTkToplevel):
         if self.type_var.get() == "window":
             self._row("窗口标题：", ctk.CTkEntry(self._param_box, textvariable=self.title_var))
             ctk.CTkLabel(self._param_box, text="（模糊匹配，包含关键词即触发）",
-                         text_color="gray").pack(anchor="w", padx=108)
+                         text_color="gray").pack(anchor="w", padx=8, pady=(0, 4))
         else:
             self._image_row("图片：", self.image_var)
             self._row("置信度：", ctk.CTkEntry(self._param_box, textvariable=self.conf_var, width=80))
@@ -721,7 +801,7 @@ class MonitorRuleDialog(ctk.CTkToplevel):
         if act == "custom_key":
             self._row("动作按键：", ctk.CTkEntry(self._param_box, textvariable=self.action_key_var, width=120))
             ctk.CTkLabel(self._param_box, text="（组合键用 + 连接，如 ctrl+s）",
-                         text_color="gray").pack(anchor="w", padx=108)
+                         text_color="gray").pack(anchor="w", padx=8, pady=(0, 4))
         elif act == "click_image":
             self._image_row("动作图片：", self.action_image_var)
 
