@@ -24,7 +24,8 @@ from executor import Executor
 from monitor import GlobalMonitor
 from platform_utils import (
     get_ui_font, get_mono_font, get_app_icon, set_window_icon,
-    HotkeyManager, resource_path, get_app_dir
+    HotkeyManager, resource_path, get_app_dir,
+    has_accessibility_permission, open_accessibility_settings
 )
 
 ctk.set_appearance_mode("System")
@@ -267,7 +268,17 @@ class App(ctk.CTk):
             return
         if self.executor and self.executor.is_running():
             return
-        # 保存配置（包含命令列表），便于下次恢复
+        if not has_accessibility_permission():
+            from tkinter import messagebox
+            result = messagebox.askyesno(
+                "权限不足",
+                "在 macOS 上，KeyboardWizard 需要「辅助功能」权限才能控制鼠标和键盘。\n\n"
+                "请在系统设置中授予权限，然后重新运行。\n\n"
+                "是否现在打开系统设置？"
+            )
+            if result:
+                open_accessibility_settings()
+            return
         self._save_config()
         self.executor = Executor(
             commands=self.commands,

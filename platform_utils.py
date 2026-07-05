@@ -320,6 +320,45 @@ def window_exists(title: str) -> bool:
 
 
 # ---------------------------------------------------------------------------
+# 权限检查（macOS 特有）
+# ---------------------------------------------------------------------------
+def has_accessibility_permission() -> bool:
+    """检查当前程序是否有 macOS 辅助功能权限。"""
+    if not IS_MACOS:
+        return True
+    try:
+        import subprocess
+        result = subprocess.run(
+            ["/usr/bin/osascript", "-e",
+             'tell application "System Events" to get properties'],
+            capture_output=True, text=True, timeout=5
+        )
+        return result.returncode == 0
+    except Exception:
+        return False
+
+
+def open_accessibility_settings():
+    """打开 macOS 系统设置的辅助功能页面。"""
+    if not IS_MACOS:
+        return
+    try:
+        import subprocess
+        subprocess.run(
+            ["open", "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility"],
+            capture_output=True
+        )
+    except Exception:
+        try:
+            subprocess.run(
+                ["open", "/System/Library/PreferencePanes/Security.prefPane"],
+                capture_output=True
+            )
+        except Exception:
+            pass
+
+
+# ---------------------------------------------------------------------------
 # 粘贴快捷键
 # ---------------------------------------------------------------------------
 def get_paste_modifiers() -> list[str]:
