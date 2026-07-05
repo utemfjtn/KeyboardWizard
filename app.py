@@ -32,6 +32,7 @@ ctk.set_default_color_theme("blue")
 
 DEFAULT_START_HOTKEY = "f6"
 DEFAULT_STOP_HOTKEY = "f7"
+VERSION = "1.2.5"
 
 CONFIG_FILE = os.path.join(get_app_dir(), "config.json")
 
@@ -49,7 +50,7 @@ MONITOR_ACTION_NAMES = {
 class App(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("按键精灵 · Python 版")
+        self.title("KeyboardWizard")
         self.geometry("1000x680")
         self.minsize(900, 600)
         self._try_set_icon()
@@ -189,6 +190,8 @@ class App(ctk.CTk):
         self.btn_stop.pack(side="left", padx=2)
         self.lbl_status = ctk.CTkLabel(run_bar, text="状态：就绪", text_color="gray")
         self.lbl_status.pack(side="left", padx=12)
+        ctk.CTkLabel(run_bar, text=f"v{VERSION}", text_color="#666666",
+                     font=ctk.CTkFont(size=10)).pack(side="right", padx=8)
 
         # 右侧：日志 + 全局监控状态
         right = ctk.CTkFrame(self, width=360)

@@ -128,7 +128,7 @@ elif IS_LINUX:
 if icon_path and not os.path.exists(icon_path):
     icon_path = None
 
-app_name = "按键精灵"
+app_name = "KeyboardWizard"
 if IS_WINDOWS:
     exe = EXE(
         pyz,
