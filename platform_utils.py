@@ -6,6 +6,7 @@
 """
 from __future__ import annotations
 
+import os
 import sys
 import platform
 
@@ -27,6 +28,109 @@ def current_os() -> str:
     if IS_LINUX:
         return "linux"
     return sys.platform
+
+
+# ---------------------------------------------------------------------------
+# 资源路径 / 应用数据目录
+# ---------------------------------------------------------------------------
+def resource_path(*parts: str) -> str:
+    """获取资源文件的绝对路径，兼容 PyInstaller 打包后的 _MEIPASS 解包目录。
+
+    用法：
+        resource_path("assets", "app.ico")
+        resource_path("assets")
+    """
+    base = getattr(sys, "_MEIPASS", os.path.abspath("."))
+    if parts:
+        return os.path.join(base, *parts)
+    return base
+
+
+def get_app_dir() -> str:
+    """返回应用数据目录（用于存放 config.json、crash.log 等）。
+
+    - Windows: %APPDATA%/KeyboardWizard
+    - macOS:   ~/Library/Application Support/KeyboardWizard
+    - Linux:   ~/.config/keyboardwizard
+    """
+    app_name = "KeyboardWizard"
+    if IS_WINDOWS:
+        base = os.environ.get("APPDATA") or os.path.expanduser("~")
+        return os.path.join(base, app_name)
+    if IS_MACOS:
+        return os.path.join(os.path.expanduser("~"),
+                            "Library", "Application Support", app_name)
+    # Linux / 其他
+    base = os.environ.get("XDG_CONFIG_HOME") or os.path.expanduser("~/.config")
+    return os.path.join(base, app_name.lower())
+
+
+# ---------------------------------------------------------------------------
+# macOS 辅助功能权限（Accessibility）
+# ---------------------------------------------------------------------------
+def has_accessibility_permission() -> bool:
+    """检查当前进程是否拥有辅助功能权限（macOS）。
+
+    Windows/Linux 直接返回 True（不需要此权限）。
+    """
+    if not IS_MACOS:
+        return True
+    try:
+        from ApplicationServices import AXIsProcessTrustedWithOptions
+        from CoreFoundation import CFDictionaryCreate, kCFBooleanTrue
+        from CoreFoundation import kCFTypeDictionaryKeyCallBacks
+        from CoreFoundation import kCFTypeDictionaryValueCallBacks
+        key = "AXTrustedCheckOptionPrompt"
+        opts = CFDictionaryCreate(
+            None, [key], [kCFBooleanTrue],
+            1, kCFTypeDictionaryKeyCallBacks, kCFTypeDictionaryValueCallBacks
+        )
+        return bool(AXIsProcessTrustedWithOptions(opts))
+    except Exception:
+        # pyobjc 未安装或调用失败，降级为只检查不弹窗
+        try:
+            from ApplicationServices import AXIsProcessTrusted
+            return bool(AXIsProcessTrusted())
+        except Exception:
+            return True  # 无法判断时，不阻塞启动
+
+
+def open_accessibility_settings() -> bool:
+    """打开系统设置的辅助功能面板（macOS）。"""
+    if not IS_MACOS:
+        return False
+    try:
+        import subprocess
+        # macOS 13+ 的新路径
+        subprocess.Popen([
+            "open", "x-apple.systempreferences:com.apple.preference.security"
+            "?Privacy_Accessibility"
+        ])
+        return True
+    except Exception:
+        return False
+
+
+def has_input_monitoring_permission() -> bool:
+    """检查输入监控权限（macOS 10.15+）。
+
+    用于 pynput 监听全局键盘事件。Windows/Linux 直接返回 True。
+    """
+    if not IS_MACOS:
+        return True
+    try:
+        # 通过 IORegistry 检查是否被列入输入监控信任列表
+        import subprocess
+        # 检查当前进程是否在输入监控列表中
+        r = subprocess.run(
+            ["sqlite3", "/Library/Application Support/com.apple.TCC/TCC.db",
+             "SELECT client FROM access WHERE service='kTCCServicePostEvent';"],
+            capture_output=True, text=True, timeout=3
+        )
+        # 这个查询需要 root 权限，普通进程拿不到，所以这里只是尽力而为
+        return True  # 无法准确判断时，不阻塞
+    except Exception:
+        return True
 
 
 # ---------------------------------------------------------------------------

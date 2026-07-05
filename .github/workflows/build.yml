@@ -53,6 +53,33 @@ jobs:
         run: |
           python -m PyInstaller --clean --noconfirm build.spec
 
+      - name: 代码签名（macOS，ad-hoc + entitlements）
+        if: runner.os == 'macOS'
+        run: |
+          # GitHub Actions 上没有 Apple Developer 证书，使用 ad-hoc 签名（-）
+          # 关键：entitlements 中的 com.apple.security.cs.disable-library-validation
+          # 允许加载 PyInstaller 打包的未签名 dylib（libjxl/libhwy/libbrotlidec 等）
+          # 否则 AMFI 会终止进程，崩溃报告显示 bug_type 309 / trmStatus 1
+          APP="dist/按键精灵.app"
+          if [ ! -d "$APP" ]; then
+            echo "未找到 .app，dist 目录内容："
+            ls -la dist/
+            exit 1
+          fi
+          echo "==== 签名前 ===="
+          codesign -dv "$APP" 2>&1 || true
+          echo "==== 执行 ad-hoc 签名（含 entitlements）===="
+          codesign --deep --force --sign - \
+            --options runtime \
+            --entitlements entitlements.plist \
+            "$APP"
+          echo "==== 签名后 ===="
+          codesign -dv "$APP" 2>&1 || true
+          echo "==== 验证签名 ===="
+          codesign --verify --verbose=4 "$APP" 2>&1 || true
+          echo "==== entitlements 检查 ===="
+          codesign -d --entitlements - "$APP" 2>&1 || true
+
       - name: 整理产物（Windows）
         if: runner.os == 'Windows'
         shell: pwsh
