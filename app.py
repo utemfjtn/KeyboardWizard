@@ -32,7 +32,7 @@ ctk.set_default_color_theme("blue")
 
 DEFAULT_START_HOTKEY = "f6"
 DEFAULT_STOP_HOTKEY = "f7"
-VERSION = "1.3.2"
+VERSION = "2.0.0"
 
 CONFIG_FILE = os.path.join(get_app_dir(), "config.json")
 
@@ -57,9 +57,11 @@ class App(ctk.CTk):
 
         self.commands = []            # 命令列表
         self.executor = None
+        self.recorder = None         # 录制器
         self.monitor = GlobalMonitor(rules=[], on_log=self._log)
         self.start_hotkey = DEFAULT_START_HOTKEY
         self.stop_hotkey = DEFAULT_STOP_HOTKEY
+        self.record_hotkey = "f8"    # 录制快捷键
         self.monitor_rules = []
 
         self._build_menu()
@@ -68,7 +70,6 @@ class App(ctk.CTk):
         self._refresh_list()
         self._warmup_macos()
         self._setup_hotkeys()
-        self._check_macos_permissions()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -96,33 +97,6 @@ class App(ctk.CTk):
                 pass
         except Exception:
             pass
-
-    # ------------------------------------------------------------------ macOS 权限检查
-    def _check_macos_permissions(self):
-        """macOS 启动时检查辅助功能权限，缺失则弹窗引导用户授权。"""
-        if sys.platform != "darwin":
-            return
-        from platform_utils import has_accessibility_permission
-        if has_accessibility_permission():
-            return
-        # 没有权限 → 弹窗提示（不阻塞主界面，用 after 延迟显示）
-        self.after(300, self._show_accessibility_prompt)
-
-    def _show_accessibility_prompt(self):
-        from platform_utils import open_accessibility_settings
-        result = messagebox.askyesno(
-            "需要辅助功能权限",
-            "KeyboardWizard 需要「辅助功能」权限才能使用全局快捷键和鼠标控制。\n\n"
-            "请在系统设置中授予权限：\n"
-            "  系统设置 → 隐私与安全性 → 辅助功能\n"
-            "  勾选 KeyboardWizard\n\n"
-            "⚠️ 重要：授权后必须重启 KeyboardWizard 才能生效！\n\n"
-            "是否现在打开系统设置？",
-        )
-        if result:
-            open_accessibility_settings()
-        self._log("提示：未授予辅助功能权限，全局快捷键和鼠标操作不可用", "warn")
-        self._log("请在「系统设置 → 隐私与安全性 → 辅助功能」中授权并重启应用", "warn")
 
     # ------------------------------------------------------------------ 图标
     def _try_set_icon(self):
@@ -216,6 +190,10 @@ class App(ctk.CTk):
                                       fg_color="#e74c3c", hover_color="#cb3728",
                                       command=self._stop, state="disabled")
         self.btn_stop.pack(side="left", padx=2)
+        self.btn_record = ctk.CTkButton(run_bar, text="● 录制 (F8)", width=120,
+                                        fg_color="#8e44ad", hover_color="#6c3483",
+                                        command=self._toggle_record)
+        self.btn_record.pack(side="left", padx=2)
         self.lbl_status = ctk.CTkLabel(run_bar, text="状态：就绪", text_color="gray")
         self.lbl_status.pack(side="left", padx=12)
         ctk.CTkLabel(run_bar, text=f"v{VERSION}", text_color="#666666",
@@ -331,9 +309,27 @@ class App(ctk.CTk):
             on_log=self._log,
             on_state=self._on_state,
             on_step=self._on_step,
+            on_error=self._on_exec_error,
         )
         self._set_running_ui(True)
         self.executor.start()
+
+    def _on_exec_error(self, error_msg, cmd_index):
+        """执行出错时的回调，弹出对话框让用户选择后续操作。"""
+        import queue
+        q = queue.Queue()
+        def show_dialog():
+            desc = C.describe(self.commands[cmd_index]) if cmd_index < len(self.commands) else "?"
+            result = messagebox.askyesnocancel(
+                "执行出错",
+                f"第 {cmd_index + 1} 条指令执行出错：\n\n"
+                f"指令：{desc}\n"
+                f"错误：{error_msg[:300]}\n\n"
+                f"是 = 重试\n否 = 跳过此指令\n取消 = 停止运行",
+            )
+            q.put({True: "retry", False: "skip", None: "stop"}[result])
+        self.after(0, show_dialog)
+        return q.get()  # 阻塞直到用户选择
 
     def _stop(self):
         if self.executor:
@@ -444,6 +440,7 @@ class App(ctk.CTk):
         try:
             ok1 = self._hotkey_mgr.add_hotkey(self.start_hotkey, self._on_start_hotkey)
             ok2 = self._hotkey_mgr.add_hotkey(self.stop_hotkey, self._on_stop_hotkey)
+            ok3 = self._hotkey_mgr.add_hotkey(self.record_hotkey, self._on_record_hotkey)
             if not ok1 or not ok2:
                 self._log("注册快捷键失败", "error")
         except Exception as e:
@@ -454,6 +451,59 @@ class App(ctk.CTk):
 
     def _on_stop_hotkey(self):
         self.after(0, self._stop)
+
+    def _on_record_hotkey(self):
+        self.after(0, self._toggle_record)
+
+    # ------------------------------------------------------------------ 录制
+    def _toggle_record(self):
+        """切换录制状态。"""
+        if self.recorder and self.recorder.is_recording():
+            self._stop_record()
+        else:
+            self._start_record()
+
+    def _start_record(self):
+        """开始录制鼠标键盘操作。"""
+        if self.executor and self.executor.is_running():
+            messagebox.showwarning("提示", "请先停止运行中的脚本")
+            return
+        try:
+            from recorder import Recorder
+        except Exception as e:
+            messagebox.showerror("录制不可用", f"录制模块加载失败：{e}")
+            return
+        self.recorder = Recorder(
+            on_log=self._log,
+            on_state=self._on_record_state,
+        )
+        # macOS 权限检查
+        from platform_utils import IS_MACOS, has_accessibility_permission
+        if IS_MACOS and not has_accessibility_permission():
+            self._log("警告：未授予辅助功能权限，录制可能无法工作", "warn")
+            self._log("请在「系统设置 → 隐私与安全性 → 辅助功能」中授权", "warn")
+        self.recorder.start()
+        self.btn_record.configure(text="■ 停止录制", fg_color="#c0392b", hover_color="#922b21")
+        self._log("开始录制，按 F8 或点击按钮停止", "info")
+
+    def _stop_record(self):
+        """停止录制，将录制的指令追加到列表。"""
+        if not self.recorder:
+            return
+        self.recorder.stop()
+        new_cmds = self.recorder.get_commands()
+        if new_cmds:
+            self.commands.extend(new_cmds)
+            self._refresh_list()
+            self._log(f"录制完成，新增 {len(new_cmds)} 条指令", "info")
+        else:
+            self._log("录制完成，未捕获到操作", "warn")
+
+    def _on_record_state(self, state):
+        def upd():
+            if state == "stopped":
+                self.btn_record.configure(text="● 录制 (F8)", fg_color="#8e44ad", hover_color="#6c3483")
+        self.after(0, upd)
 
     # ------------------------------------------------------------------ 文件操作
     def _new_file(self):
@@ -530,6 +580,8 @@ class App(ctk.CTk):
     def _on_close(self):
         if self.executor and self.executor.is_running():
             self.executor.stop()
+        if self.recorder and self.recorder.is_recording():
+            self.recorder.stop()
         self.monitor.stop()
         self._save_config()
         if hasattr(self, "_hotkey_mgr"):

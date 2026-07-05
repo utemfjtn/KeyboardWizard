@@ -1,4 +1,4 @@
-# KeyboardWizard
+# 按键精灵 · Python 版
 
 基于 Python + customtkinter + pyautogui 的桌面自动化工具，类似商业软件"按键精灵"。支持可视化编排指令、图片识别点击、条件判断、循环、全局快捷键、全局弹窗监控等功能，可打包为独立可执行文件。
 
@@ -102,7 +102,7 @@ build.bat
 python -m PyInstaller --clean --noconfirm build.spec
 ```
 
-产物位于 `dist/KeyboardWizard.exe`，单文件约 40-60 MB，无需安装 Python 即可运行。
+产物位于 `dist/按键精灵.exe`，单文件约 40-60 MB，无需安装 Python 即可运行。
 
 > 如按键/截图无反应，请右键 → **以管理员身份运行**。
 
@@ -117,11 +117,9 @@ chmod +x build_mac.sh
 python3 -m PyInstaller --clean --noconfirm build.spec
 ```
 
-产物位于 `dist/KeyboardWizard.app`，约 50-70 MB。
+产物位于 `dist/按键精灵.app`，约 50-70 MB。
 
 > 首次运行需在「系统设置 → 隐私与安全性」中允许打开，并授予辅助功能/屏幕录制权限。
-> 
-> **重要**：授权辅助功能权限后，必须重启 KeyboardWizard 才能生效。
 
 ### Linux
 
@@ -134,11 +132,11 @@ chmod +x build_linux.sh
 python3 -m PyInstaller --clean --noconfirm build.spec
 ```
 
-产物位于 `dist/KeyboardWizard`，约 40-60 MB。
+产物位于 `dist/按键精灵`，约 40-60 MB。
 
 ```bash
-chmod +x dist/KeyboardWizard
-./dist/KeyboardWizard
+chmod +x dist/按键精灵
+./dist/按键精灵
 ```
 
 ### GitHub Actions 自动打包
