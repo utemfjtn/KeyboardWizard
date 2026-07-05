@@ -14,6 +14,7 @@ from __future__ import annotations
 import threading
 import time
 import traceback
+import sys
 
 
 class Executor:
@@ -75,10 +76,28 @@ class Executor:
                 return
             time.sleep(0.05)
 
+    def _check_macos_permissions(self):
+        """macOS 运行前检查辅助功能权限，缺失则警告。
+        
+        pyautogui 的模拟操作（鼠标点击、按键）需要辅助功能权限，
+        没有权限时操作会静默失败（不抛异常），导致用户以为程序没反应。
+        """
+        if sys.platform != "darwin":
+            return
+        try:
+            from platform_utils import has_accessibility_permission
+            if not has_accessibility_permission():
+                self.on_log("警告：未授予辅助功能权限", "warn")
+                self.on_log("鼠标点击和按键操作可能无法生效", "warn")
+                self.on_log("请在「系统设置 → 隐私与安全性 → 辅助功能」中授权", "warn")
+        except Exception:
+            pass
+
     def _run(self):
         self.on_state("running")
         self.on_log("开始运行", "info")
         try:
+            self._check_macos_permissions()
             self.pc = 0
             repeat_stack = []  # 元素: {"start": pc_of_repeat, "remaining": int}
             n = len(self.commands)
