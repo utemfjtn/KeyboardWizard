@@ -377,19 +377,26 @@ class HotkeyManager:
 
     def _init_backend(self):
         """初始化后端。"""
-        # macOS 优先使用 CGEventTap（避免 pynput 后台线程 TSM 崩溃）
+        # macOS 只用 CGEventTap，禁用 pynput 回退
+        # 原因：macOS 26+ 要求 TSMGetInputSourceProperty 等 HIToolbox API
+        # 必须在主线程调用。pynput.Listener 在后台线程运行，会触发
+        # dispatch_assert_queue_fail (SIGTRAP) 崩溃，且无法绕过。
+        # CGEventTap 挂在主线程 CFRunLoop 上，回调在主线程执行，安全。
         if IS_MACOS:
             try:
                 self._mac_mgr = _MacHotkeyManager()
                 if self._mac_mgr.available:
                     self._backend = "mac_cgeventtap"
                     return
-                # CGEventTap 失败（通常缺权限），回退到 pynput
-                print("[HotkeyManager] CGEventTap 不可用，回退到 pynput（可能不稳定）")
+                print("[HotkeyManager] CGEventTap 不可用（通常缺少辅助功能权限），全局快捷键已禁用")
+                self._backend = None
+                return
             except Exception as e:
                 print(f"[HotkeyManager] _MacHotkeyManager 初始化失败: {e}")
+                self._backend = None
+                return
 
-        # Windows/Linux 或 macOS 回退：尝试 pynput
+        # Windows/Linux：优先 pynput，回退 keyboard
         try:
             from pynput import keyboard as pynput_kb
             self._backend = "pynput"
@@ -397,7 +404,6 @@ class HotkeyManager:
             return
         except Exception:
             pass
-        # 最后回退到 keyboard 库
         try:
             import keyboard as kb_lib
             self._backend = "keyboard"

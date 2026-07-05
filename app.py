@@ -68,6 +68,7 @@ class App(ctk.CTk):
         self._refresh_list()
         self._warmup_macos()
         self._setup_hotkeys()
+        self._check_macos_permissions()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
 
@@ -95,6 +96,33 @@ class App(ctk.CTk):
                 pass
         except Exception:
             pass
+
+    # ------------------------------------------------------------------ macOS 权限检查
+    def _check_macos_permissions(self):
+        """macOS 启动时检查辅助功能权限，缺失则弹窗引导用户授权。"""
+        if sys.platform != "darwin":
+            return
+        from platform_utils import has_accessibility_permission
+        if has_accessibility_permission():
+            return
+        # 没有权限 → 弹窗提示（不阻塞主界面，用 after 延迟显示）
+        self.after(300, self._show_accessibility_prompt)
+
+    def _show_accessibility_prompt(self):
+        from platform_utils import open_accessibility_settings
+        result = messagebox.askyesno(
+            "需要辅助功能权限",
+            "KeyboardWizard 需要「辅助功能」权限才能使用全局快捷键和鼠标控制。\n\n"
+            "请在系统设置中授予权限：\n"
+            "  系统设置 → 隐私与安全性 → 辅助功能\n"
+            "  勾选 KeyboardWizard\n\n"
+            "授权后重启应用即可使用全部功能。\n\n"
+            "是否现在打开系统设置？",
+        )
+        if result:
+            open_accessibility_settings()
+        self._log("提示：未授予辅助功能权限，全局快捷键不可用", "warn")
+        self._log("请在「系统设置 → 隐私与安全性 → 辅助功能」中授权 KeyboardWizard", "warn")
 
     # ------------------------------------------------------------------ 图标
     def _try_set_icon(self):
