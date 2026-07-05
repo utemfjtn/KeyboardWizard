@@ -17,15 +17,15 @@ jobs:
         include:
           - os: windows-latest
             name: Windows
-            artifact_name: 按键精灵-windows
+            artifact_name: KeyboardWizard-Windows
             ext: exe
           - os: macos-latest
             name: macOS
-            artifact_name: 按键精灵-macos
+            artifact_name: KeyboardWizard-macOS
             ext: app
           - os: ubuntu-latest
             name: Linux
-            artifact_name: 按键精灵-linux
+            artifact_name: KeyboardWizard-Linux
             ext: bin
 
     runs-on: ${{ matrix.os }}
@@ -62,28 +62,53 @@ jobs:
         run: |
           $exe = Get-ChildItem dist -Filter *.exe | Select-Object -First 1
           if ($exe) {
-            Write-Host "产物：$($exe.FullName)"
+            $newName = "KeyboardWizard-Windows.exe"
+            Rename-Item -Path $exe.FullName -NewName $newName
+            Write-Host "产物已重命名：$newName"
+            Write-Host "大小：$([math]::Round($(Get-Item "dist\$newName").Length / 1MB, 1)) MB"
           }
 
       - name: 整理产物（macOS）
         if: runner.os == 'macOS'
         run: |
           ls -la dist/
+          if [ -d "dist/KeyboardWizard.app" ]; then
+            # 打包成 zip，包含 .app 目录
+            cd dist
+            zip -r "KeyboardWizard-macOS.zip" "KeyboardWizard.app"
+            cd ..
+            echo "macOS 应用已打包为 zip"
+            ls -lh dist/KeyboardWizard-macOS.zip
+          else
+            echo "错误：未找到 KeyboardWizard.app"
+            ls -la dist/
+            exit 1
+          fi
 
       - name: 整理产物（Linux）
         if: runner.os == 'Linux'
         run: |
           ls -la dist/
+          if [ -f "dist/KeyboardWizard" ]; then
+            mv "dist/KeyboardWizard" "dist/KeyboardWizard-Linux"
+            chmod +x "dist/KeyboardWizard-Linux"
+            echo "Linux 二进制已重命名：KeyboardWizard-Linux"
+            ls -lh dist/KeyboardWizard-Linux
+          else
+            echo "错误：未找到 KeyboardWizard 二进制文件"
+            ls -la dist/
+            exit 1
+          fi
 
       - name: 上传产物（手动触发时）
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: KeyboardWizard-${{ matrix.name }}
+          name: ${{ matrix.artifact_name }}
           path: |
-            dist/*.exe
-            dist/*.app
-            dist/KeyboardWizard
+            dist/KeyboardWizard-Windows.exe
+            dist/KeyboardWizard-macOS.zip
+            dist/KeyboardWizard-Linux
           if-no-files-found: error
 
       - name: 发布 Release（打 tag 时自动）
@@ -91,26 +116,34 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*.exe
-            dist/*.app
-            dist/KeyboardWizard
+            dist/KeyboardWizard-Windows.exe
+            dist/KeyboardWizard-macOS.zip
+            dist/KeyboardWizard-Linux
           name: KeyboardWizard ${{ github.ref_name }}
           body: |
             ## 使用方法
 
             ### Windows
-            1. 下载 `KeyboardWizard.exe`（约 40-60 MB）
+            1. 下载 `KeyboardWizard-Windows.exe`（约 50-80 MB）
             2. 双击即可运行，无需安装 Python
             3. 如按键/截图无反应，右键 → 以管理员身份运行
 
             ### macOS
-            1. 下载 `KeyboardWizard.app`（约 50-70 MB）
-            2. 拖入应用程序文件夹即可运行
-            3. 首次运行需在「系统设置 → 隐私与安全性」中允许打开
-            4. 需在「辅助功能」和「屏幕录制」中授予权限
+            1. 下载 `KeyboardWizard-macOS.zip`（约 60-90 MB）
+            2. 解压后将 `KeyboardWizard.app` 拖入「应用程序」文件夹
+            3. 首次运行：在应用程序中找到 KeyboardWizard，右键 → 打开（绕过公证限制）
+            4. 需在「系统设置 → 隐私与安全性」中授予权限：
+               - 辅助功能（全局快捷键）
+               - 屏幕录制（截图和图片识别）
+               - 自动化（窗口操作）
 
             ### Linux
-            1. 下载 `KeyboardWizard`（约 40-60 MB）
-            2. 添加执行权限：`chmod +x KeyboardWizard`
-            3. 运行：`./KeyboardWizard`
-            4. 建议使用 X11 会话（Wayland 下截图可能受限制）
+            1. 下载 `KeyboardWizard-Linux`（约 50-80 MB）
+            2. 添加执行权限：`chmod +x KeyboardWizard-Linux`
+            3. 运行：`./KeyboardWizard-Linux`
+            4. 建议使用 X11 会话（Wayland 下截图和全局快捷键可能受限制）
+
+            ## 本次更新
+            - 修复 Release 产物平台区分
+            - macOS 产物改为 zip 打包，包含 .app 目录
+            - 各平台文件名添加明确后缀
