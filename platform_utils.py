@@ -194,10 +194,172 @@ def set_window_icon(tk_window, icon_path: str | None) -> bool:
 
 # ---------------------------------------------------------------------------
 # 全局快捷键
-# 优先使用 pynput（跨平台），Windows 下回退到 keyboard 库
+# macOS：使用 CGEventTap（主线程 CFRunLoop），避免 pynput 后台线程崩溃
+# Windows/Linux：优先 pynput，回退 keyboard
 # ---------------------------------------------------------------------------
+
+# macOS 虚拟键码映射（key name -> keycode）
+_MAC_KEYCODES = {
+    "a": 0, "s": 1, "d": 2, "f": 3, "h": 4, "g": 5, "z": 6, "x": 7,
+    "c": 8, "v": 9, "b": 11, "q": 12, "w": 13, "e": 14, "r": 15,
+    "y": 16, "t": 17, "1": 18, "2": 19, "3": 20, "4": 21, "6": 22,
+    "5": 23, "=": 24, "9": 25, "7": 26, "-": 27, "8": 28, "0": 29,
+    "]": 30, "o": 31, "u": 32, "[": 33, "i": 34, "p": 35, "l": 37,
+    "j": 38, "'": 39, "k": 40, ";": 41, "\\": 42, ",": 43, "/": 44,
+    "n": 45, "m": 46, ".": 47, "`": 50, " ": 49,
+    "f1": 122, "f2": 120, "f3": 99, "f4": 118, "f5": 96,
+    "f6": 97, "f7": 98, "f8": 100, "f9": 101, "f10": 109,
+    "f11": 103, "f12": 111,
+    "enter": 36, "return": 36, "tab": 48, "space": 49,
+    "delete": 51, "backspace": 51, "esc": 53, "escape": 53,
+    "ctrl": 59, "control": 59, "shift": 56, "alt": 58, "option": 58,
+    "cmd": 55, "command": 55, "win": 55, "super": 55,
+    "left": 123, "right": 124, "down": 125, "up": 126,
+    "home": 115, "end": 119, "pageup": 116, "pagedown": 121,
+    "capslock": 57,
+}
+
+
+class _MacHotkeyManager:
+    """macOS 专用全局快捷键管理器，基于 CGEventTap。
+
+    pynput 的 Listener 在后台线程运行，macOS 26+ 要求 TSMGetInputSourceProperty
+    等 HIToolbox API 在主线程调用，后台线程调用会触发 dispatch_assert_queue_fail
+    (SIGTRAP) 崩溃。
+
+    本类用 CGEventTap 直接挂在主线程的 CFRunLoop 上（Tk mainloop 已在跑），
+    回调在主线程执行，完全避免线程亲和性问题。
+    """
+
+    def __init__(self):
+        self._hotkeys = {}          # frozenset(keycodes) -> callback
+        self._current_keys = set()  # 当前按下的键码集合
+        self._tap_port = None       # CGEventTap 的 CFMachPortRef
+        self._run_loop_src = None   # CFRunLoopSourceRef
+        self._available = False
+        self._callback_ref = None   # 保持回调引用防止 GC
+        self._init_tap()
+
+    def _init_tap(self):
+        """创建 CGEventTap 并加入主线程 CFRunLoop。必须在主线程调用。"""
+        try:
+            from Quartz import (
+                CGEventTapCreate,
+                kCGSessionEventTap,
+                kCGHeadInsertEventTap,
+                kCGEventTapOptionListenOnly,
+                kCGEventKeyDown,
+                kCGEventKeyUp,
+                CGEventMaskBit,
+            )
+            from CoreFoundation import (
+                CFRunLoopGetMain,
+                CFRunLoopAddSource,
+                CFMachPortCreateRunLoopSource,
+                kCFRunLoopCommonModes,
+            )
+
+            mask = (
+                CGEventMaskBit(kCGEventKeyDown) | CGEventMaskBit(kCGEventKeyUp)
+            )
+
+            # 保存回调引用，防止 pyobjc 回调被 GC 回收
+            self._callback_ref = self._tap_callback
+
+            self._tap_port = CGEventTapCreate(
+                kCGSessionEventTap,
+                kCGHeadInsertEventTap,
+                kCGEventTapOptionListenOnly,  # 只监听不拦截
+                mask,
+                self._callback_ref,
+                None,
+            )
+
+            if self._tap_port:
+                self._run_loop_src = CFMachPortCreateRunLoopSource(
+                    None, self._tap_port, 0
+                )
+                if self._run_loop_src:
+                    loop = CFRunLoopGetMain()
+                    CFRunLoopAddSource(
+                        loop, self._run_loop_src, kCFRunLoopCommonModes
+                    )
+                    self._available = True
+                else:
+                    print("[MacHotkey] CFMachPortCreateRunLoopSource 失败")
+            else:
+                # CGEventTapCreate 返回 None 通常是因为没有辅助功能权限
+                print("[MacHotkey] CGEventTap 创建失败")
+                print("[MacHotkey] 请在「系统设置 → 隐私与安全性 → 辅助功能」中授予权限")
+        except Exception as e:
+            print(f"[MacHotkey] 初始化异常: {e}")
+            self._available = False
+
+    def _tap_callback(self, proxy, event_type, event, refcon):
+        """CGEventTap 回调，在主线程 CFRunLoop 中执行。"""
+        try:
+            from Quartz import (
+                CGEventGetIntegerValueField,
+                kCGKeyboardEventKeycode,
+                kCGEventKeyDown,
+                kCGEventKeyUp,
+            )
+            if event_type == kCGEventKeyDown:
+                keycode = CGEventGetIntegerValueField(
+                    event, kCGKeyboardEventKeycode
+                )
+                self._current_keys.add(keycode)
+                # 检查所有注册的热键
+                for key_set, cb in list(self._hotkeys.items()):
+                    if key_set <= self._current_keys:
+                        try:
+                            cb()
+                        except Exception:
+                            pass
+            elif event_type == kCGEventKeyUp:
+                keycode = CGEventGetIntegerValueField(
+                    event, kCGKeyboardEventKeycode
+                )
+                self._current_keys.discard(keycode)
+        except Exception:
+            pass
+        # 返回 event 让事件继续传递（ListenOnly 模式其实不拦截）
+        return event
+
+    @property
+    def available(self) -> bool:
+        return self._available
+
+    def add_hotkey(self, hotkey: str, callback) -> bool:
+        if not self._available:
+            return False
+        keycodes = self._parse_hotkey(hotkey)
+        if keycodes is None:
+            return False
+        self._hotkeys[keycodes] = callback
+        return True
+
+    def _parse_hotkey(self, hotkey: str):
+        """将 'ctrl+shift+f6' 解析为 frozenset(keycodes)。"""
+        parts = [p.strip().lower() for p in hotkey.split("+") if p.strip()]
+        keycodes = set()
+        for p in parts:
+            kc = _MAC_KEYCODES.get(p)
+            if kc is None:
+                return None
+            keycodes.add(kc)
+        return frozenset(keycodes) if keycodes else None
+
+    def remove_all(self):
+        self._hotkeys.clear()
+        self._current_keys.clear()
+
+
 class HotkeyManager:
     """跨平台全局快捷键管理器。
+
+    macOS：使用 _MacHotkeyManager（CGEventTap，主线程）
+    Windows/Linux：优先 pynput，回退 keyboard
 
     用法：
         mgr = HotkeyManager()
@@ -210,10 +372,24 @@ class HotkeyManager:
         self._hooks = []
         self._listener = None
         self._backend = None
+        self._mac_mgr = None
         self._init_backend()
 
     def _init_backend(self):
-        """尝试初始化后端，优先 pynput，失败则尝试 keyboard。"""
+        """初始化后端。"""
+        # macOS 优先使用 CGEventTap（避免 pynput 后台线程 TSM 崩溃）
+        if IS_MACOS:
+            try:
+                self._mac_mgr = _MacHotkeyManager()
+                if self._mac_mgr.available:
+                    self._backend = "mac_cgeventtap"
+                    return
+                # CGEventTap 失败（通常缺权限），回退到 pynput
+                print("[HotkeyManager] CGEventTap 不可用，回退到 pynput（可能不稳定）")
+            except Exception as e:
+                print(f"[HotkeyManager] _MacHotkeyManager 初始化失败: {e}")
+
+        # Windows/Linux 或 macOS 回退：尝试 pynput
         try:
             from pynput import keyboard as pynput_kb
             self._backend = "pynput"
@@ -221,6 +397,7 @@ class HotkeyManager:
             return
         except Exception:
             pass
+        # 最后回退到 keyboard 库
         try:
             import keyboard as kb_lib
             self._backend = "keyboard"
@@ -261,6 +438,10 @@ class HotkeyManager:
         if not self.available:
             return False
 
+        # macOS CGEventTap 后端
+        if self._backend == "mac_cgeventtap" and self._mac_mgr:
+            return self._mac_mgr.add_hotkey(hotkey, callback)
+
         if self._backend == "keyboard":
             try:
                 hook = self._kb_lib.add_hotkey(hotkey, callback, suppress=False)
@@ -276,7 +457,11 @@ class HotkeyManager:
 
                 def on_press(key):
                     try:
-                        k = key.char if hasattr(key, "char") and key.char else key
+                        # 注意：访问 key.char 在 macOS 上会触发 HIToolbox TSM
+                        # API 调用，在后台线程会导致崩溃。只对特殊键做匹配。
+                        k = key if not hasattr(key, "char") else (
+                            key.char if key.char and not IS_MACOS else key
+                        )
                     except Exception:
                         k = key
                     current.add(k)
@@ -285,7 +470,9 @@ class HotkeyManager:
 
                 def on_release(key):
                     try:
-                        k = key.char if hasattr(key, "char") and key.char else key
+                        k = key if not hasattr(key, "char") else (
+                            key.char if key.char and not IS_MACOS else key
+                        )
                     except Exception:
                         k = key
                     current.discard(k)
@@ -305,6 +492,9 @@ class HotkeyManager:
 
     def remove_all(self):
         """移除所有已注册的热键。"""
+        if self._backend == "mac_cgeventtap" and self._mac_mgr:
+            self._mac_mgr.remove_all()
+            return
         if self._backend == "keyboard":
             for h in self._hooks:
                 try:

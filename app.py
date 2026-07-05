@@ -65,9 +65,35 @@ class App(ctk.CTk):
         self._build_layout()
         self._load_config()
         self._refresh_list()
+        self._warmup_macos()
         self._setup_hotkeys()
 
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    # ------------------------------------------------------------------ macOS 预热
+    def _warmup_macos(self):
+        """macOS 启动预热：在主线程加载 Quartz/CoreFoundation 等 pyobjc 框架。
+
+        macOS 26+ 要求 HIToolbox TSM API 在主线程调用。pynput/pyautogui 在后台
+        线程调用这些 API 会崩溃。提前在主线程导入并触发初始化，让模块级缓存生效。
+        """
+        if not sys.platform == "darwin":
+            return
+        try:
+            # 在主线程预导入 Quartz / CoreFoundation（触发 pyobjc 框架初始化）
+            import Quartz
+            import CoreFoundation
+            # 预热 HIToolbox：在主线程获取当前输入源（安全）
+            try:
+                import ctypes
+                import ctypes.util
+                carbon = ctypes.CDLL(ctypes.util.find_library('Carbon'))
+                carbon.TISGetCurrentInputSource.restype = ctypes.c_void_p
+                _ = carbon.TISGetCurrentInputSource()
+            except Exception:
+                pass
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------ 图标
     def _try_set_icon(self):

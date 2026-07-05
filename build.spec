@@ -82,6 +82,7 @@ hiddenimports = [
     "CoreGraphics",
     "Quartz",
     "Cocoa",
+    "CoreFoundation",
 ]
 
 # macOS 需要显式收集 pynput 的 darwin 后端、pyobjc 框架等动态模块
