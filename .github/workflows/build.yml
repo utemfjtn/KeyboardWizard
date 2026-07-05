@@ -65,7 +65,7 @@ jobs:
           # 关键：entitlements 中的 com.apple.security.cs.disable-library-validation
           # 允许加载 PyInstaller 打包的未签名 dylib（libjxl/libhwy/libbrotlidec 等）
           # 否则 AMFI 会终止进程，崩溃报告显示 bug_type 309 / trmStatus 1
-          APP="dist/按键精灵.app"
+          APP="dist/KeyboardWizard.app"
           if [ ! -d "$APP" ]; then
             echo "未找到 .app，dist 目录内容："
             ls -la dist/
@@ -91,14 +91,11 @@ jobs:
           set -e
           mkdir -p release
           if [ "${{ runner.os }}" = "Windows" ]; then
-            # Windows 产物是 dist/按键精灵.exe
             cp dist/*.exe release/KeyboardWizard-windows.exe 2>/dev/null || true
           elif [ "${{ runner.os }}" = "macOS" ]; then
-            # macOS 产物是 dist/按键精灵.app（目录），需要打包成 zip
-            cd dist && zip -r -y ../release/KeyboardWizard-macos.app.zip 按键精灵.app && cd ..
+            cd dist && zip -r -y ../release/KeyboardWizard-macos.app.zip KeyboardWizard.app && cd ..
           elif [ "${{ runner.os }}" = "Linux" ]; then
-            # Linux 产物是 dist/按键精灵（无后缀的可执行文件）
-            cp dist/按键精灵 release/KeyboardWizard-linux 2>/dev/null || true
+            cp dist/KeyboardWizard release/KeyboardWizard-linux 2>/dev/null || true
             chmod +x release/KeyboardWizard-linux 2>/dev/null || true
           fi
           echo "==== release 目录内容 ===="
