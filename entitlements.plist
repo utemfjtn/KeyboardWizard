@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- 允许加载未签名的 dylib（PyInstaller 打包的 Python 扩展模块需要） -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+    <!-- 允许未签名的可执行内存（Python JIT/动态代码需要） -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+    <!-- 允许 JIT（部分 Python C 扩展需要） -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+    <!-- 允许 Apple Events（用于控制其他应用窗口） -->
+    <key>com.apple.security.automation.apple-events</key>
+    <true/>
+    <!-- 允许调试自身（便于排查崩溃） -->
+    <key>com.apple.security.get-task-allow</key>
+    <true/>
+</dict>
+</plist>
